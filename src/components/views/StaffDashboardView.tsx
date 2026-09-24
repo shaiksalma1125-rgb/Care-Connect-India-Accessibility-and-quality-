@@ -8,9 +8,12 @@ import {
   Complaint,
   User,
   LanguageCode,
-  PatientReferral
+  PatientReferral,
+  OfflineOPDToken,
+  OfflineTokenCallStatus
 } from '../../types';
 import { apiStore } from '../../services/apiStore';
+import { offlineQueueService, getDetailedNetworkStatus } from '../../services/offlineQueueService';
 import { translations } from '../../utils/translations';
 import {
   normalizeReferralStatus,
@@ -41,8 +44,14 @@ import {
   FileCheck,
   Truck,
   ShieldCheck,
-  UserCheck
+  UserCheck,
+  Wifi,
+  WifiOff,
+  Volume2,
+  Ticket,
+  HeartPulse
 } from 'lucide-react';
+import { HighRiskStaffManagement } from './HighRiskStaffManagement';
 
 interface StaffDashboardViewProps {
   currentUser: User | null;
@@ -82,7 +91,7 @@ export const StaffDashboardView: React.FC<StaffDashboardViewProps> = ({
   const initialHospitalId = currentUser?.hospitalId || (hospitals[0] ? hospitals[0].id : '');
   const [selectedHospitalId, setSelectedHospitalId] = useState<string>(initialHospitalId);
   const [activeTab, setActiveTab] = useState<
-    'doctors' | 'services' | 'medicines' | 'appointments' | 'complaints' | 'referrals'
+    'doctors' | 'services' | 'medicines' | 'appointments' | 'complaints' | 'referrals' | 'high-risk'
   >('doctors');
   const [notification, setNotification] = useState<string | null>(null);
 
@@ -242,15 +251,15 @@ export const StaffDashboardView: React.FC<StaffDashboardViewProps> = ({
     }
 
     if (referralSearchQuery.trim()) {
-      const q = referralSearchQuery.toLowerCase();
+      const q = referralSearchQuery.toLowerCase().trim();
       list = list.filter(
         (r) =>
-          r.patientName.toLowerCase().includes(q) ||
-          r.referralId.toLowerCase().includes(q) ||
-          r.fromHospitalName.toLowerCase().includes(q) ||
-          r.toHospitalName.toLowerCase().includes(q) ||
-          (r.doctorSpecialist && r.doctorSpecialist.toLowerCase().includes(q)) ||
-          r.reason.toLowerCase().includes(q)
+          String(r.patientName || '').toLowerCase().includes(q) ||
+          String(r.referralId || '').toLowerCase().includes(q) ||
+          String(r.fromHospitalName || '').toLowerCase().includes(q) ||
+          String(r.toHospitalName || '').toLowerCase().includes(q) ||
+          String(r.doctorSpecialist || '').toLowerCase().includes(q) ||
+          String(r.reason || '').toLowerCase().includes(q)
       );
     }
     return list;
@@ -272,6 +281,11 @@ export const StaffDashboardView: React.FC<StaffDashboardViewProps> = ({
       rejected: list.filter((r) => normalizeReferralStatus(r.status) === 'Rejected').length
     };
   }, [allReferrals, selectedHospitalId, referralScope]);
+
+  const highRiskCount = useMemo(
+    () => apiStore.getHighRiskPatients(selectedHospitalId).length,
+    [selectedHospitalId, renderCount, refreshKey]
+  );
 
   const showToast = (msg: string) => {
     setNotification(msg);
@@ -363,6 +377,9 @@ export const StaffDashboardView: React.FC<StaffDashboardViewProps> = ({
   };
 
   // APPOINTMENT HANDLERS
+  const [appointmentSubTab, setAppointmentSubTab] = useState<'online' | 'offline_2g'>('online');
+  const [isSyncingOffline, setIsSyncingOffline] = useState(false);
+
   const handleAppointmentStatus = (
     aptId: string,
     status: 'BOOKED' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED'
@@ -370,6 +387,38 @@ export const StaffDashboardView: React.FC<StaffDashboardViewProps> = ({
     apiStore.updateAppointmentStatus(aptId, status);
     setRenderCount((c) => c + 1);
     showToast(`Appointment status changed to ${status}`);
+  };
+
+  // OFFLINE 2G QUEUE HANDLERS (For Hospital Staff)
+  const staffOfflineTokens = useMemo(() => {
+    return offlineQueueService.getTokens(selectedHospitalId);
+  }, [selectedHospitalId, renderCount]);
+
+  const handleOfflineTokenCall = (tokenId: string, status: OfflineTokenCallStatus) => {
+    const updated = offlineQueueService.updateTokenStatus(tokenId, status);
+    if (updated) {
+      setRenderCount((c) => c + 1);
+      const token = staffOfflineTokens.find((t) => t.id === tokenId);
+      if (status === 'CALLING') {
+        showToast(`📢 Chamber Announcement: Now Calling ${token?.tokenCode || 'Token'} for ${token?.department || 'OPD'} at ${token?.roomNumber || 'Chamber'}!`);
+      } else {
+        showToast(`Offline OPD token marked as ${status}`);
+      }
+    }
+  };
+
+  const handleSyncOfflineStaffQueue = () => {
+    setIsSyncingOffline(true);
+    setTimeout(() => {
+      const result = offlineQueueService.syncPendingTokens();
+      setRenderCount((c) => c + 1);
+      setIsSyncingOffline(false);
+      if (result.syncedCount > 0) {
+        showToast(`✓ Synchronized ${result.syncedCount} offline OPD token(s) to apex hospital server!`);
+      } else {
+        showToast('All facility offline tokens are synchronized.');
+      }
+    }, 500);
   };
 
   // COMPLAINT RESOLUTION STATE & HANDLERS
@@ -413,7 +462,7 @@ export const StaffDashboardView: React.FC<StaffDashboardViewProps> = ({
               <AlertTriangle className="w-5 h-5 shrink-0 text-amber-600" />
               <div className="space-y-0.5">
                 <p className="font-semibold">
-                  Signed in as {currentUser.name} ({currentUser.role.replace('_', ' ')})
+                  Signed in as {currentUser.name} ({String(currentUser.role || 'STAFF').replace(/_/g, ' ')})
                 </p>
                 <p className="text-[11px] text-amber-700">
                   Hospital staff credentials are required to modify hospital records. Please authenticate below.
@@ -647,6 +696,18 @@ export const StaffDashboardView: React.FC<StaffDashboardViewProps> = ({
           <GitFork className="w-4 h-4" />
           <span>Inter-Facility Referrals ({referralCounts.total})</span>
         </button>
+
+        <button
+          onClick={() => setActiveTab('high-risk')}
+          className={`flex-1 min-w-[130px] py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+            activeTab === 'high-risk'
+              ? 'bg-rose-600 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-50'
+          }`}
+        >
+          <HeartPulse className="w-4 h-4" />
+          <span>High-Risk Follow-ups ({highRiskCount})</span>
+        </button>
       </div>
 
       {/* TAB 1: DOCTORS DUTY ROSTER */}
@@ -857,87 +918,278 @@ export const StaffDashboardView: React.FC<StaffDashboardViewProps> = ({
       {/* TAB 4: APPOINTMENTS */}
       {activeTab === 'appointments' && (
         <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-4">
-          <div className="border-b border-slate-100 pb-3">
-            <h3 className="font-bold text-base text-slate-900">
-              Active Digital OPD Patient Tokens
-            </h3>
-            <p className="text-xs text-slate-500">
-              Mark patient triage, verify tokens, and record consultations completed.
-            </p>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+            <div>
+              <h3 className="font-bold text-base text-slate-900">
+                Digital OPD Patient Tokens & Queue Control
+              </h3>
+              <p className="text-xs text-slate-500">
+                Manage online appointments and offline 2G low-connectivity queue tokens for this facility.
+              </p>
+            </div>
+
+            {/* Sub-tab switcher between Online & Offline 2G */}
+            <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl">
+              <button
+                type="button"
+                onClick={() => setAppointmentSubTab('online')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  appointmentSubTab === 'online'
+                    ? 'bg-white text-blue-700 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Online Appointments ({appointments.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setAppointmentSubTab('offline_2g')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  appointmentSubTab === 'offline_2g'
+                    ? 'bg-amber-500 text-slate-950 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Ticket className="w-3.5 h-3.5" />
+                <span>Offline 2G Queue ({staffOfflineTokens.length})</span>
+              </button>
+            </div>
           </div>
 
-          {appointments.length === 0 ? (
-            <p className="text-xs text-slate-500 italic p-4 text-center">No OPD appointments logged for this facility.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 text-slate-600 font-bold uppercase border-b border-slate-200">
-                  <tr>
-                    <th className="p-3">Token ID</th>
-                    <th className="p-3">Patient Name</th>
-                    <th className="p-3">Doctor</th>
-                    <th className="p-3">Visit Date & Slot</th>
-                    <th className="p-3">Status</th>
-                    <th className="p-3 text-right">Status Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {appointments.map((apt) => (
-                    <tr key={apt.id} className="hover:bg-slate-50/70">
-                      <td className="p-3 font-mono font-bold text-blue-700">{apt.appointmentId}</td>
-                      <td className="p-3 font-bold text-slate-900">{apt.patientName}</td>
-                      <td className="p-3 text-slate-600">{apt.doctorName}</td>
-                      <td className="p-3">
-                        <div className="font-semibold text-slate-800">{apt.appointmentDate}</div>
-                        <div className="text-[11px] text-slate-400">{apt.appointmentTime}</div>
-                      </td>
-                      <td className="p-3">
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                            apt.status === 'COMPLETED'
-                              ? 'bg-slate-100 text-slate-700 border-slate-200'
-                              : apt.status === 'CONFIRMED'
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                              : apt.status === 'CANCELLED'
-                              ? 'bg-rose-50 text-rose-700 border-rose-200'
-                              : 'bg-blue-50 text-blue-700 border-blue-200'
-                          }`}
-                        >
-                          ● {apt.status}
-                        </span>
-                      </td>
-                      <td className="p-3 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          {apt.status === 'BOOKED' && (
-                            <button
-                              onClick={() => handleAppointmentStatus(apt.id, 'CONFIRMED')}
-                              className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-[10px] shadow-xs transition-colors"
+          {/* ONLINE APPOINTMENTS VIEW */}
+          {appointmentSubTab === 'online' && (
+            <>
+              {appointments.length === 0 ? (
+                <p className="text-xs text-slate-500 italic p-4 text-center">No OPD appointments logged for this facility.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50 text-slate-600 font-bold uppercase border-b border-slate-200">
+                      <tr>
+                        <th className="p-3">Token ID</th>
+                        <th className="p-3">Patient Name</th>
+                        <th className="p-3">Doctor</th>
+                        <th className="p-3">Visit Date & Slot</th>
+                        <th className="p-3">Status</th>
+                        <th className="p-3 text-right">Status Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {appointments.map((apt) => (
+                        <tr key={apt.id} className="hover:bg-slate-50/70">
+                          <td className="p-3 font-mono font-bold text-blue-700">{apt.appointmentId}</td>
+                          <td className="p-3 font-bold text-slate-900">{apt.patientName}</td>
+                          <td className="p-3 text-slate-600">{apt.doctorName}</td>
+                          <td className="p-3">
+                            <div className="font-semibold text-slate-800">{apt.appointmentDate}</div>
+                            <div className="text-[11px] text-slate-400">{apt.appointmentTime}</div>
+                          </td>
+                          <td className="p-3">
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                                apt.status === 'COMPLETED'
+                                  ? 'bg-slate-100 text-slate-700 border-slate-200'
+                                  : apt.status === 'CONFIRMED'
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                  : apt.status === 'CANCELLED'
+                                  ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                  : 'bg-blue-50 text-blue-700 border-blue-200'
+                              }`}
                             >
-                              Confirm
-                            </button>
-                          )}
-                          {apt.status === 'CONFIRMED' && (
-                            <button
-                              onClick={() => handleAppointmentStatus(apt.id, 'COMPLETED')}
-                              className="px-2.5 py-1 rounded-lg bg-slate-800 text-white font-semibold text-[10px] shadow-xs transition-colors"
+                              ● {apt.status}
+                            </span>
+                          </td>
+                          <td className="p-3 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              {apt.status === 'BOOKED' && (
+                                <button
+                                  onClick={() => handleAppointmentStatus(apt.id, 'CONFIRMED')}
+                                  className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-[10px] shadow-xs transition-colors cursor-pointer"
+                                >
+                                  Confirm
+                                </button>
+                              )}
+                              {apt.status === 'CONFIRMED' && (
+                                <button
+                                  onClick={() => handleAppointmentStatus(apt.id, 'COMPLETED')}
+                                  className="px-2.5 py-1 rounded-lg bg-slate-800 text-white font-semibold text-[10px] shadow-xs transition-colors cursor-pointer"
+                                >
+                                  Complete
+                                </button>
+                              )}
+                              {apt.status !== 'CANCELLED' && apt.status !== 'COMPLETED' && (
+                                <button
+                                  onClick={() => handleAppointmentStatus(apt.id, 'CANCELLED')}
+                                  className="px-2 py-1 rounded-lg border border-rose-200 hover:bg-rose-50 text-rose-700 font-semibold text-[10px] transition-colors cursor-pointer"
+                                >
+                                  Cancel
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* OFFLINE 2G QUEUE VIEW */}
+          {appointmentSubTab === 'offline_2g' && (
+            <div className="space-y-4">
+              {/* Network Status & Sync Header */}
+              <div className="bg-slate-900 text-white p-4 rounded-2xl border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-1.5 rounded-lg bg-amber-500 text-slate-950 font-bold">
+                    <WifiOff className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-xs text-white">Rural 2G / Offline Queue Manager</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider bg-amber-950 text-amber-300 border border-amber-500/40">
+                        Status: {getDetailedNetworkStatus().mode === 'LOW_CONNECTIVITY' ? '2G-Low Connectivity' : getDetailedNetworkStatus().mode}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Tokens generated in low-connectivity areas or via SMS (166) / USSD (*99*108#).
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleSyncOfflineStaffQueue}
+                    disabled={isSyncingOffline}
+                    className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs disabled:opacity-60"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isSyncingOffline ? 'animate-spin' : ''}`} />
+                    <span>{isSyncingOffline ? 'Syncing...' : 'Sync Offline Records'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {staffOfflineTokens.length === 0 ? (
+                <div className="p-8 text-center bg-slate-50 rounded-2xl border border-slate-200 text-slate-500 text-xs space-y-2">
+                  <Ticket className="w-8 h-8 text-slate-400 mx-auto" />
+                  <p className="font-bold text-slate-700">No Offline 2G Tokens Pending for this Hospital</p>
+                  <p className="text-[11px] text-slate-500 max-w-md mx-auto">
+                    When patients or ASHA workers generate offline tokens or book via SMS/USSD, they appear dynamically here for chamber calling and clinical management.
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto border border-slate-200 rounded-2xl">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50 text-slate-700 uppercase font-bold border-b border-slate-200">
+                      <tr>
+                        <th className="p-3">Token Code</th>
+                        <th className="p-3">Patient Name</th>
+                        <th className="p-3">Department</th>
+                        <th className="p-3">Chamber</th>
+                        <th className="p-3">Channel</th>
+                        <th className="p-3">Sync Status</th>
+                        <th className="p-3">Call Status</th>
+                        <th className="p-3 text-right">Queue Calling Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {staffOfflineTokens.map((st) => (
+                        <tr key={st.id} className="hover:bg-slate-50/70">
+                          <td className="p-3 font-mono font-black text-blue-700 text-sm">{st.tokenCode}</td>
+                          <td className="p-3">
+                            <span className="font-bold text-slate-900 block">{st.patientName}</span>
+                            {st.patientPhone && (
+                              <span className="text-[10px] text-slate-500 block">📞 {st.patientPhone}</span>
+                            )}
+                          </td>
+                          <td className="p-3 text-slate-700 font-medium">{st.department}</td>
+                          <td className="p-3 text-slate-600 font-semibold">{st.roomNumber}</td>
+                          <td className="p-3">
+                            <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                              {st.source === 'SMS' ? '📱 SMS (166)' : st.source === 'USSD' ? '📞 USSD (*99*108#)' : '🌐 Offline 2G'}
+                            </span>
+                          </td>
+                          <td className="p-3">
+                            <span
+                              className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${
+                                st.syncStatus === 'SYNCED'
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                  : 'bg-amber-50 text-amber-700 border-amber-200'
+                              }`}
                             >
-                              Complete
-                            </button>
-                          )}
-                          {apt.status !== 'CANCELLED' && apt.status !== 'COMPLETED' && (
-                            <button
-                              onClick={() => handleAppointmentStatus(apt.id, 'CANCELLED')}
-                              className="px-2 py-1 rounded-lg border border-rose-200 hover:bg-rose-50 text-rose-700 font-semibold text-[10px] transition-colors"
+                              {st.syncStatus === 'SYNCED' ? '● Synced' : '● Pending Sync'}
+                            </span>
+                          </td>
+                          <td className="p-3">
+                            <span
+                              className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase border ${
+                                st.status === 'CALLING'
+                                  ? 'bg-amber-100 text-amber-800 border-amber-300 animate-pulse'
+                                  : st.status === 'COMPLETED' || st.status === 'SERVED'
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                  : st.status === 'NO_SHOW'
+                                  ? 'bg-slate-100 text-slate-600 border-slate-200'
+                                  : st.status === 'CANCELLED'
+                                  ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                  : 'bg-blue-50 text-blue-700 border-blue-200'
+                              }`}
                             >
-                              Cancel
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                              ● {st.status}
+                            </span>
+                          </td>
+                          <td className="p-3 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              {st.status !== 'CALLING' && st.status !== 'COMPLETED' && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOfflineTokenCall(st.id, 'CALLING')}
+                                  className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] flex items-center gap-1 shadow-xs transition-colors cursor-pointer"
+                                  title="Announce token and call patient into chamber"
+                                >
+                                  <Volume2 className="w-3 h-3" />
+                                  <span>Call Next</span>
+                                </button>
+                              )}
+
+                              {st.status !== 'COMPLETED' && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOfflineTokenCall(st.id, 'COMPLETED')}
+                                  className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] shadow-xs transition-colors cursor-pointer"
+                                >
+                                  Served
+                                </button>
+                              )}
+
+                              {st.status !== 'NO_SHOW' && st.status !== 'COMPLETED' && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOfflineTokenCall(st.id, 'NO_SHOW')}
+                                  className="px-2 py-1 rounded-lg border border-slate-300 hover:bg-slate-100 text-slate-700 font-semibold text-[10px] transition-colors cursor-pointer"
+                                >
+                                  No-Show
+                                </button>
+                              )}
+
+                              {st.status !== 'CANCELLED' && st.status !== 'COMPLETED' && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOfflineTokenCall(st.id, 'CANCELLED')}
+                                  className="px-2 py-1 rounded-lg border border-rose-200 hover:bg-rose-50 text-rose-700 font-semibold text-[10px] transition-colors cursor-pointer"
+                                >
+                                  Cancel
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -1734,6 +1986,15 @@ export const StaffDashboardView: React.FC<StaffDashboardViewProps> = ({
             </form>
           </div>
         </div>
+      )}
+
+      {/* TAB 7: HIGH-RISK PATIENT FOLLOW-UP MANAGEMENT */}
+      {activeTab === 'high-risk' && (
+        <HighRiskStaffManagement
+          hospitalId={selectedHospitalId}
+          currentUser={currentUser}
+          onNavigateToHospital={(hId) => setSelectedHospitalId(hId)}
+        />
       )}
 
       {/* OFFICIAL REFERRAL SLIP MODAL */}

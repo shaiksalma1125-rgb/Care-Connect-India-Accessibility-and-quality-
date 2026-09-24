@@ -147,7 +147,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   };
 
   const userName = currentUser?.name || 'Shaik Salma';
-  const userRole = currentUser?.role ? currentUser.role.replace('_', ' ') : 'CITIZEN';
+  const userRole = String(currentUser?.role || 'CITIZEN').replace(/_/g, ' ');
 
   return (
     <header

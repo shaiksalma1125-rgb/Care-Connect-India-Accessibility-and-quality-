@@ -40,7 +40,7 @@ export const EmergencyEscalationModal: React.FC<EmergencyEscalationModalProps> =
   const [callerPhone, setCallerPhone] = useState(currentUser?.mobile || '9849112501');
   const [address, setAddress] = useState(currentUser?.location || 'Hanumanpet, Vijayawada');
   const [emergencyType, setEmergencyType] = useState<EmergencyIncident['emergencyType']>(
-    initialSymptom?.toLowerCase().includes('chest') ? 'CARDIAC_ARREST' : 'TRAUMA_ROAD_ACCIDENT'
+    String(initialSymptom || '').toLowerCase().includes('chest') ? 'CARDIAC_ARREST' : 'TRAUMA_ROAD_ACCIDENT'
   );
   const [activeIncident, setActiveIncident] = useState<EmergencyIncident | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);

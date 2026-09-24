@@ -302,7 +302,9 @@ export default function App() {
         <div className="mb-4">
           <LowConnectivityBanner
             language={language}
+            currentUser={currentUser}
             onNavigateToHospital={(hId) => handleNavigate('hospital-details', { hospitalId: hId })}
+            onNavigate={handleNavigate}
           />
         </div>
 

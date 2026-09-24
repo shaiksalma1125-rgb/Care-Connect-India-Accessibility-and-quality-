@@ -38,12 +38,14 @@ export const DiagnosticServicesView: React.FC<DiagnosticServicesViewProps> = ({
   const diagnostics = useMemo(() => apiStore.getDiagnostics(), []);
 
   const filteredDiagnostics = useMemo(() => {
+    const q = String(searchQuery || '').trim().toLowerCase();
     return diagnostics.filter((d) => {
       const matchHosp = selectedHospitalId === 'ALL' || d.hospitalId === selectedHospitalId;
       const matchCat = selectedCategory === 'ALL' || d.category === selectedCategory;
       const matchSearch =
-        d.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        d.category.toLowerCase().includes(searchQuery.toLowerCase());
+        !q ||
+        String(d.name || '').toLowerCase().includes(q) ||
+        String(d.category || '').toLowerCase().includes(q);
       return matchHosp && matchCat && matchSearch;
     });
   }, [diagnostics, selectedHospitalId, selectedCategory, searchQuery]);

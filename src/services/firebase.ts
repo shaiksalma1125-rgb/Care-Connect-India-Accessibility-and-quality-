@@ -144,7 +144,7 @@ export async function firebaseRegister(userData: {
   const userRecord: User = {
     id: fbUser.uid,
     name: userData.name.trim(),
-    email: userData.email.trim().toLowerCase(),
+    email: String(userData.email || '').trim().toLowerCase(),
     mobile: userData.mobile.trim(),
     role: userData.role,
     location: userData.location,
@@ -253,7 +253,7 @@ export async function firebaseGoogleLogin(targetEmail?: string, targetName?: str
   } catch (err: any) {
     console.warn('Firebase popup encountered restriction or closed, using authenticated Google profile:', err?.message || err);
     const chosenEmail = targetEmail || 'citizen@healthcare.gov.in';
-    const chosenName = targetName || chosenEmail.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+    const chosenName = targetName || String(chosenEmail).split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
     const googleUser = apiStore.loginWithGoogle(chosenEmail, chosenName);
     
     // Attempt Firestore persistence in background

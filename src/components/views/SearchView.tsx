@@ -252,8 +252,8 @@ const HOSPITAL_ALIASES: Record<string, string[]> = {
   ]
 };
 
-function normalizeText(text: string): string {
-  return (text || '')
+function normalizeText(text: any): string {
+  return String(text || '')
     .toLowerCase()
     .replace(/[^\w\s]/g, ' ')
     .replace(/\s+/g, ' ')
@@ -397,7 +397,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
       return null;
     }
 
-    const cleanDocQuery = qNorm.replace(/\b(dr|doctor)\b/g, '').trim();
+    const cleanDocQuery = String(qNorm || '').replace(/\b(dr|doctor)\b/g, '').trim();
     if (cleanDocQuery.length >= 3 && allDoctors.some((d) => normalizeText(d.name).includes(cleanDocQuery))) {
       return null;
     }
@@ -558,7 +558,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
     // Requirement: If user searches a doctor's name, show the hospital where that
     // doctor works and the doctor details.
     // =========================================================================
-    const cleanDocQuery = qNorm.replace(/\b(dr|doctor)\b/g, '').trim();
+    const cleanDocQuery = String(qNorm || '').replace(/\b(dr|doctor)\b/g, '').trim();
     const cleanDocQueryWords = cleanDocQuery.split(' ').filter((w) => w.length >= 3);
 
     const isSpecialistQuery = Object.values(SPECIALTY_DICTIONARY).some((info) =>

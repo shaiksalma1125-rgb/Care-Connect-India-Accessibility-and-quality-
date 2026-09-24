@@ -65,13 +65,16 @@ export const FacilityQualityDashboardView: React.FC<FacilityQualityDashboardView
   }, [scores, hospitals]);
 
   const filtered = useMemo(() => {
+    const q = String(searchQuery || '').trim().toLowerCase();
     return enrichedScores
       .filter((s) => {
         const matchType = filterType === 'ALL' || s.type === filterType;
-        const matchQuery =
-          s.hospitalName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          s.district.toLowerCase().includes(searchQuery.toLowerCase());
-        return matchType && matchQuery;
+        if (!matchType) return false;
+        if (!q) return true;
+
+        const matchHosp = String(s.hospitalName || '').toLowerCase().includes(q);
+        const matchDist = String(s.district || '').toLowerCase().includes(q);
+        return matchHosp || matchDist;
       })
       .sort((a, b) => {
         if (sortBy === 'score') return b.overallScore - a.overallScore;

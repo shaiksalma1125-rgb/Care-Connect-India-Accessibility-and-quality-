@@ -136,15 +136,15 @@ export function isReferralForUser(referral: PatientReferral, user: User | null |
   if (!user || !user.id) return false;
 
   // 1. Primary Authority: Match by unique patient / user ID
-  if (referral.patientId && referral.patientId.trim() !== '') {
-    return referral.patientId.trim() === user.id.trim();
+  if (referral.patientId && String(referral.patientId).trim() !== '') {
+    return String(referral.patientId).trim() === String(user.id).trim();
   }
 
   // 2. Secondary fallback (only when referral has no patientId set):
   // Match strictly by email
   if (user.email && referral.patientEmail) {
-    const uEmail = user.email.toLowerCase().trim();
-    const rEmail = referral.patientEmail.toLowerCase().trim();
+    const uEmail = String(user.email).toLowerCase().trim();
+    const rEmail = String(referral.patientEmail).toLowerCase().trim();
     if (uEmail && rEmail && uEmail === rEmail) {
       return true;
     }
@@ -152,8 +152,8 @@ export function isReferralForUser(referral: PatientReferral, user: User | null |
 
   // Match strictly by 10-digit mobile number
   if (user.mobile && referral.patientPhone) {
-    const userDigits = user.mobile.replace(/\D/g, '').slice(-10);
-    const refDigits = referral.patientPhone.replace(/\D/g, '').slice(-10);
+    const userDigits = String(user.mobile).replace(/\D/g, '').slice(-10);
+    const refDigits = String(referral.patientPhone).replace(/\D/g, '').slice(-10);
     if (userDigits.length === 10 && refDigits.length === 10 && userDigits === refDigits) {
       return true;
     }

@@ -15,6 +15,10 @@ import {
   DiagnosticService,
   OPDQueueInfo,
   HighRiskPatient,
+  HighRiskCategory,
+  FollowUpType,
+  FollowUpStatus,
+  FollowUpOutcome,
   FacilityQualityScore,
   EmergencyIncident
 } from '../types';
@@ -142,10 +146,11 @@ class ApiStore {
   getUsers(): User[] {
     const list = getLocal<User[]>(STORAGE_KEYS.USERS, DEMO_USERS);
     const existingIds = new Set(list.map((u) => u.id));
-    const existingEmails = new Set(list.map((u) => u.email.toLowerCase()));
+    const existingEmails = new Set(list.filter((u) => !!u.email).map((u) => String(u.email).toLowerCase()));
     let updated = false;
     for (const u of DEMO_USERS) {
-      if (!existingIds.has(u.id) && !existingEmails.has(u.email.toLowerCase())) {
+      const uEmail = u.email ? String(u.email).toLowerCase() : '';
+      if (!existingIds.has(u.id) && (!uEmail || !existingEmails.has(uEmail))) {
         list.push(u);
         updated = true;
       }
@@ -199,7 +204,7 @@ class ApiStore {
   loginWithGoogle(email: string, name?: string): User {
     const users = this.getUsers();
     const normalized = (email || 'shaiksalma1125@gmail.com').trim().toLowerCase();
-    let found = users.find((u) => u.email.toLowerCase() === normalized);
+    let found = users.find((u) => String(u.email || '').toLowerCase() === normalized);
     if (!found) {
       const derivedName = name?.trim() || normalized.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
       found = {
@@ -424,11 +429,11 @@ class ApiStore {
 
   login(identifier: string, password?: string, expectedRole?: UserRole): User | null {
     const users = this.getUsers();
-    const normalized = identifier.trim().toLowerCase();
+    const normalized = String(identifier || '').trim().toLowerCase();
     
     // Check direct email or mobile match
     const found = users.find(
-      (u) => u.email.toLowerCase() === normalized || u.mobile.trim() === identifier.trim()
+      (u) => String(u.email || '').toLowerCase() === normalized || String(u.mobile || '').trim() === String(identifier || '').trim()
     );
 
     if (!found) {
@@ -461,7 +466,7 @@ class ApiStore {
         'dr.rao@example.com': 'password123',
         'admin.health@sih2026.gov.in': 'password123'
       });
-      const expectedPassword = storedPasswords[found.email.toLowerCase()] || 'password123';
+      const expectedPassword = storedPasswords[String(found.email || '').toLowerCase()] || 'password123';
       if (password !== expectedPassword && password.length < 6) {
         return null;
       }
@@ -490,7 +495,7 @@ class ApiStore {
 
     if (userData.password) {
       const storedPasswords = getLocal<Record<string, string>>('healthconnect_passwords', {});
-      storedPasswords[newUser.email.toLowerCase()] = userData.password;
+      storedPasswords[String(newUser.email || '').toLowerCase()] = userData.password;
       setLocal('healthconnect_passwords', storedPasswords);
     }
 
@@ -775,8 +780,8 @@ class ApiStore {
 
   areSlotsMatching(timeA: string, timeB: string): boolean {
     if (!timeA || !timeB) return false;
-    const cleanA = timeA.trim().replace(/\s+/g, ' ');
-    const cleanB = timeB.trim().replace(/\s+/g, ' ');
+    const cleanA = String(timeA || '').trim().replace(/\s+/g, ' ');
+    const cleanB = String(timeB || '').trim().replace(/\s+/g, ' ');
     if (cleanA.toLowerCase() === cleanB.toLowerCase()) return true;
 
     // Check by splitting on delimiter (- or – or to)
@@ -1025,10 +1030,11 @@ class ApiStore {
   }> {
     const allMeds = this.getMedicines();
     const currentHosp = this.getHospitalById(currentHospitalId);
+    const cleanMedName = String(medicineName || '').toLowerCase().trim();
     const matching = allMeds.filter(
       (m) =>
         m.hospitalId !== currentHospitalId &&
-        m.medicineName.toLowerCase().includes(medicineName.toLowerCase()) &&
+        String(m.medicineName || '').toLowerCase().includes(cleanMedName) &&
         (m.status === 'AVAILABLE' || m.quantity > 0)
     );
     const hospitals = this.getHospitals();
@@ -1160,7 +1166,7 @@ class ApiStore {
       this.addHealthRecord({
         userId: user.id,
         abhaNumber: '91-2026-8812-4029',
-        abhaAddress: `${user.name.toLowerCase().replace(/[^a-z0-9]/g, '')}@abdm`,
+        abhaAddress: `${String(user.name || 'patient').toLowerCase().replace(/[^a-z0-9]/g, '')}@abdm`,
         recordType: 'PRESCRIPTION',
         title: `Teleconsultation Booking - ${newTC.doctorSpecialization}`,
         facilityName: newTC.hospitalName,
@@ -1277,8 +1283,8 @@ class ApiStore {
         const matched = citizens.find((u) => {
           if (r.patientEmail && u.email && r.patientEmail.toLowerCase().trim() === u.email.toLowerCase().trim()) return true;
           if (r.patientPhone && u.mobile) {
-            const uDigits = u.mobile.replace(/\D/g, '').slice(-10);
-            const rDigits = r.patientPhone.replace(/\D/g, '').slice(-10);
+            const uDigits = String(u.mobile).replace(/\D/g, '').slice(-10);
+            const rDigits = String(r.patientPhone).replace(/\D/g, '').slice(-10);
             if (uDigits && rDigits && uDigits.length === 10 && uDigits === rDigits) return true;
           }
           return false;
@@ -1325,8 +1331,8 @@ class ApiStore {
       const matched = users.find((u) => {
         if (ref.patientEmail && u.email && ref.patientEmail.toLowerCase().trim() === u.email.toLowerCase().trim()) return true;
         if (ref.patientPhone && u.mobile) {
-          const uDigits = u.mobile.replace(/\D/g, '').slice(-10);
-          const rDigits = ref.patientPhone.replace(/\D/g, '').slice(-10);
+          const uDigits = String(u.mobile).replace(/\D/g, '').slice(-10);
+          const rDigits = String(ref.patientPhone).replace(/\D/g, '').slice(-10);
           if (uDigits && rDigits && uDigits === rDigits) return true;
         }
         if (ref.patientName && u.name && ref.patientName.toLowerCase().trim() === u.name.toLowerCase().trim()) return true;
@@ -1528,7 +1534,7 @@ class ApiStore {
     return { tokenNumber, tokenCode, estimatedWaitMins, roomNumber: q.roomNumber };
   }
 
-  // High-Risk Patient Registry & Reminders
+  // High-Risk Patient Registry & Healthcare Follow-up Management
   getHighRiskPatients(hospitalId?: string): HighRiskPatient[] {
     const items = getLocal<HighRiskPatient[]>(STORAGE_KEYS.HIGH_RISK, INITIAL_HIGH_RISK_PATIENTS);
     const existingIds = new Set(items.map((h) => h.id));
@@ -1539,13 +1545,283 @@ class ApiStore {
         updated = true;
       }
     }
-    if (updated) {
-      setLocal(STORAGE_KEYS.HIGH_RISK, items);
+
+    // Ensure all records have normalized follow-up properties
+    const normalized = items.map((p) => {
+      const nextDate = p.nextFollowUpDate || p.nextFollowUpDueDate || '2026-09-28';
+      const status = p.status || (p.reminderStatus === 'MISSED' ? 'MISSED' : 'SCHEDULED');
+      const patientId = p.patientId === 'usr-cit-1' ? 'user-google-salma' : (p.patientId || p.id);
+      return {
+        ...p,
+        patientId,
+        isHighRisk: p.isHighRisk !== undefined ? p.isHighRisk : true,
+        riskCategory: p.riskCategory || (p.conditionType === 'HIGH_RISK_PREGNANCY' ? 'MATERNAL' : p.conditionType === 'INFANT_MALNUTRITION' ? 'CHILD' : 'CHRONIC_DISEASE'),
+        condition: p.condition || p.notes || 'High-risk clinical monitoring required',
+        followUpType: p.followUpType || 'CHECKUP',
+        assignedTo: p.assignedTo || p.ashaWorkerName || p.ashaWorker || 'Assigned Medical Officer',
+        assignedRole: p.assignedRole || 'Care Team',
+        nextFollowUpDate: nextDate,
+        instruction: p.instruction || p.followUpActionNotes || 'Attend scheduled clinical checkup and bring current prescription/reports.',
+        status,
+        outcomes: p.outcomes && p.outcomes.length > 0 ? p.outcomes : [
+          {
+            id: `out-${p.id}-init`,
+            recordedAt: p.createdAt || '2026-09-15T10:00:00Z',
+            recordedBy: p.assignedTo || 'Hospital Medical Officer',
+            status: status as any,
+            notes: p.notes || 'Enrolled in high-risk follow-up surveillance.',
+            vitals: p.lastVitalsRecorded || undefined,
+            nextAction: `Follow-up required on ${nextDate}`
+          }
+        ]
+      };
+    });
+
+    if (updated || items.some(p => !p.outcomes || !p.followUpType)) {
+      setLocal(STORAGE_KEYS.HIGH_RISK, normalized);
     }
+
     if (hospitalId) {
-      return items.filter((h) => h.hospitalId === hospitalId);
+      return normalized.filter((h) => h.hospitalId === hospitalId);
     }
-    return items;
+    return normalized;
+  }
+
+  getFollowUpsForPatient(userOrId: string | User): HighRiskPatient[] {
+    const all = this.getHighRiskPatients();
+    let patientId = '';
+    let email = '';
+    let phone = '';
+
+    if (typeof userOrId === 'string') {
+      patientId = userOrId.trim();
+      const user = this.getUsers().find((u) => u.id === patientId);
+      if (user) {
+        email = String(user.email || '').toLowerCase().trim();
+        phone = String(user.mobile || '').replace(/\D/g, '').slice(-10);
+      }
+    } else if (userOrId) {
+      patientId = String(userOrId.id || '').trim();
+      email = String(userOrId.email || '').toLowerCase().trim();
+      phone = String(userOrId.mobile || '').replace(/\D/g, '').slice(-10);
+    }
+
+    if (!patientId && !email && !phone) return [];
+
+    return all.filter((p) => {
+      // Match by exact patientId
+      if (p.patientId && p.patientId.trim() === patientId) return true;
+      // Match by exact email if available
+      if (email && p.patientEmail && p.patientEmail.toLowerCase().trim() === email) return true;
+      // Match by 10-digit phone number if available
+      if (phone) {
+        const pPhone = String(p.patientPhone || p.phone || '').replace(/\D/g, '').slice(-10);
+        if (pPhone && pPhone === phone) return true;
+      }
+      return false;
+    });
+  }
+
+  createHighRiskFollowUp(data: {
+    patientId: string;
+    patientName: string;
+    patientPhone: string;
+    patientEmail?: string;
+    age?: number;
+    gender?: string;
+    hospitalId: string;
+    hospitalName: string;
+    isHighRisk: boolean;
+    riskCategory: HighRiskCategory;
+    condition: string;
+    riskLevel?: 'CRITICAL' | 'HIGH' | 'MODERATE';
+    followUpType: FollowUpType;
+    assignedTo: string;
+    assignedRole?: string;
+    nextFollowUpDate: string;
+    instruction: string;
+    initialNotes?: string;
+    staffName?: string;
+  }): HighRiskPatient {
+    const list = this.getHighRiskPatients();
+    const newId = `hr-${Date.now()}`;
+    const initialOutcome: FollowUpOutcome = {
+      id: `out-${Date.now()}-1`,
+      recordedAt: new Date().toISOString(),
+      recordedBy: data.staffName || data.assignedTo || 'Hospital Staff',
+      status: 'SCHEDULED',
+      notes: data.initialNotes || `High-risk follow-up created. ${data.instruction}`,
+      nextAction: `Follow-up consultation scheduled for ${data.nextFollowUpDate}`
+    };
+
+    const newPatient: HighRiskPatient = {
+      id: newId,
+      patientId: data.patientId,
+      patientName: data.patientName,
+      patientPhone: data.patientPhone,
+      patientEmail: data.patientEmail,
+      age: data.age,
+      patientAge: data.age,
+      gender: data.gender,
+      hospitalId: data.hospitalId,
+      hospitalName: data.hospitalName,
+      isHighRisk: data.isHighRisk,
+      riskCategory: data.riskCategory,
+      condition: data.condition,
+      riskLevel: data.riskLevel || 'HIGH',
+      followUpType: data.followUpType,
+      assignedTo: data.assignedTo,
+      assignedRole: data.assignedRole || 'Medical Care Provider',
+      nextFollowUpDate: data.nextFollowUpDate,
+      nextFollowUpDueDate: data.nextFollowUpDate,
+      instruction: data.instruction,
+      status: 'SCHEDULED',
+      reminderSent: true,
+      reminderStatus: 'SENT',
+      notes: data.initialNotes || data.instruction,
+      outcomes: [initialOutcome],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    list.unshift(newPatient);
+    setLocal(STORAGE_KEYS.HIGH_RISK, list);
+    this.notifyHighRiskUpdate(newPatient.id);
+    return newPatient;
+  }
+
+  notifyHighRiskUpdate(followUpId?: string) {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('high_risk_data_updated', {
+          detail: { followUpId, timestamp: Date.now() }
+        })
+      );
+      window.dispatchEvent(new Event('storage'));
+    }
+  }
+
+  updateHighRiskFollowUp(
+    followUpId: string,
+    updates: Partial<HighRiskPatient>,
+    staffName?: string,
+    editReason?: string
+  ): HighRiskPatient | undefined {
+    const list = this.getHighRiskPatients();
+    const idx = list.findIndex((h) => h.id === followUpId);
+    if (idx === -1) return undefined;
+
+    const prev = list[idx];
+    const updated: HighRiskPatient = {
+      ...prev,
+      ...updates,
+      updatedAt: new Date().toISOString()
+    };
+
+    if (updates.nextFollowUpDate && updates.nextFollowUpDate !== prev.nextFollowUpDate) {
+      updated.nextFollowUpDueDate = updates.nextFollowUpDate;
+    }
+
+    const historyNote =
+      editReason ||
+      `Follow-up details updated by ${staffName || 'Hospital Staff'}.${
+        updates.nextFollowUpDate && updates.nextFollowUpDate !== prev.nextFollowUpDate
+          ? ` Follow-up rescheduled from ${prev.nextFollowUpDate} to ${updates.nextFollowUpDate}.`
+          : ''
+      }${
+        updates.status && updates.status !== prev.status
+          ? ` Status updated from ${prev.status} to ${updates.status}.`
+          : ''
+      }`;
+
+    const outcome: FollowUpOutcome = {
+      id: `out-${Date.now()}-edit`,
+      recordedAt: new Date().toISOString(),
+      recordedBy: staffName || 'Hospital Care Provider',
+      status: updated.status || 'SCHEDULED',
+      notes: historyNote,
+      nextAction: updated.instruction || `Next follow-up on ${updated.nextFollowUpDate}`
+    };
+
+    if (!updated.outcomes) updated.outcomes = [];
+    updated.outcomes.unshift(outcome);
+
+    list[idx] = updated;
+    setLocal(STORAGE_KEYS.HIGH_RISK, list);
+    this.notifyHighRiskUpdate(updated.id);
+    return updated;
+  }
+
+  updateFollowUpStatus(
+    followUpId: string,
+    status: FollowUpStatus,
+    outcomeNotes?: string,
+    vitals?: string,
+    staffName?: string,
+    nextAction?: string
+  ): HighRiskPatient | undefined {
+    const list = this.getHighRiskPatients();
+    const idx = list.findIndex((h) => h.id === followUpId);
+    if (idx === -1) return undefined;
+
+    const patient = list[idx];
+    patient.status = status;
+    patient.updatedAt = new Date().toISOString();
+
+    if (status === 'COMPLETED') {
+      patient.urgentEscalation = false;
+    } else if (status === 'MISSED') {
+      patient.urgentEscalation = true;
+      patient.escalationReason = outcomeNotes || 'Follow-up missed by patient. Requires urgent attention / ASHA outreach.';
+    }
+
+    const outcome: FollowUpOutcome = {
+      id: `out-${Date.now()}`,
+      recordedAt: new Date().toISOString(),
+      recordedBy: staffName || 'Hospital Staff Member',
+      status,
+      notes: outcomeNotes || `Status updated to ${status}.`,
+      vitals: vitals || undefined,
+      nextAction: nextAction || (status === 'COMPLETED' ? 'Care cycle successfully closed or routine follow-up' : undefined)
+    };
+
+    if (!patient.outcomes) {
+      patient.outcomes = [];
+    }
+    patient.outcomes.unshift(outcome);
+
+    list[idx] = patient;
+    setLocal(STORAGE_KEYS.HIGH_RISK, list);
+    this.notifyHighRiskUpdate(patient.id);
+    return patient;
+  }
+
+  escalateHighRiskFollowUp(followUpId: string, reason: string, staffName?: string): HighRiskPatient | undefined {
+    const list = this.getHighRiskPatients();
+    const idx = list.findIndex((h) => h.id === followUpId);
+    if (idx === -1) return undefined;
+
+    const patient = list[idx];
+    patient.urgentEscalation = true;
+    patient.escalationReason = reason;
+    patient.updatedAt = new Date().toISOString();
+
+    const outcome: FollowUpOutcome = {
+      id: `out-${Date.now()}-esc`,
+      recordedAt: new Date().toISOString(),
+      recordedBy: staffName || 'Hospital Staff',
+      status: patient.status || 'MISSED',
+      notes: `🚨 URGENT ESCALATION TRIGGERED: ${reason}`,
+      nextAction: 'Immediate outreach by Senior Medical Officer and local ASHA worker.'
+    };
+
+    if (!patient.outcomes) patient.outcomes = [];
+    patient.outcomes.unshift(outcome);
+
+    list[idx] = patient;
+    setLocal(STORAGE_KEYS.HIGH_RISK, list);
+    this.notifyHighRiskUpdate(patient.id);
+    return patient;
   }
 
   sendHighRiskReminder(patientId: string): HighRiskPatient | undefined {
@@ -1554,7 +1830,20 @@ class ApiStore {
     if (idx !== -1) {
       list[idx].reminderSent = true;
       list[idx].reminderStatus = 'DELIVERED';
+      
+      const outcome: FollowUpOutcome = {
+        id: `out-${Date.now()}-rem`,
+        recordedAt: new Date().toISOString(),
+        recordedBy: 'Automated Care Continuity Service',
+        status: list[idx].status || 'SCHEDULED',
+        notes: `Automated SMS & WhatsApp reminder dispatched to patient (${list[idx].patientPhone || list[idx].phone}) and care team.`,
+        nextAction: `Next follow-up on ${list[idx].nextFollowUpDate}`
+      };
+      if (!list[idx].outcomes) list[idx].outcomes = [];
+      list[idx].outcomes.unshift(outcome);
+
       setLocal(STORAGE_KEYS.HIGH_RISK, list);
+      this.notifyHighRiskUpdate(list[idx].id);
       return list[idx];
     }
     return undefined;
@@ -1568,7 +1857,24 @@ class ApiStore {
       ...data,
       id: `hr-${Date.now()}`,
       reminderSent: true,
-      reminderStatus: 'SENT'
+      reminderStatus: 'SENT',
+      status: data.status || 'SCHEDULED',
+      isHighRisk: data.isHighRisk !== undefined ? data.isHighRisk : true,
+      riskCategory: data.riskCategory || 'CHRONIC_DISEASE',
+      followUpType: data.followUpType || 'CHECKUP',
+      assignedTo: data.assignedTo || data.ashaWorkerName || 'Hospital Staff',
+      nextFollowUpDate: data.nextFollowUpDate || data.nextFollowUpDueDate || '2026-09-28',
+      instruction: data.instruction || data.followUpActionNotes || 'Mandatory clinical checkup.',
+      outcomes: [
+        {
+          id: `out-${Date.now()}`,
+          recordedAt: new Date().toISOString(),
+          recordedBy: data.assignedTo || 'Hospital Staff',
+          status: 'SCHEDULED',
+          notes: data.notes || 'High-risk patient enrolled.',
+          nextAction: 'Attend scheduled follow-up.'
+        }
+      ]
     };
     list.unshift(newPatient);
     setLocal(STORAGE_KEYS.HIGH_RISK, list);
@@ -1649,14 +1955,45 @@ class ApiStore {
 
   // Low Connectivity / Offline Token Pass Caching
   getOfflineTokens(): any[] {
+    try {
+      const v2 = localStorage.getItem('sih_offline_tokens_v2');
+      if (v2) {
+        const parsed = JSON.parse(v2);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      // fallback
+    }
     return getLocal<any[]>(STORAGE_KEYS.OFFLINE_TOKENS, []);
   }
 
   saveOfflineToken(token: any): void {
     const tokens = this.getOfflineTokens();
-    tokens.unshift(token);
-    // keep up to 10 recent tokens
-    setLocal(STORAGE_KEYS.OFFLINE_TOKENS, tokens.slice(0, 10));
+    const tokenObj = {
+      id: token.id || `off-tk-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      tokenCode: token.tokenCode,
+      tokenNumber: token.tokenNumber,
+      hospitalId: token.hospitalId,
+      hospitalName: token.hospitalName,
+      department: token.department,
+      patientName: token.patientName,
+      patientPhone: token.patientPhone || '',
+      roomNumber: token.roomNumber || 'Room 101',
+      estimatedWaitMins: token.estimatedWaitMins || 15,
+      issuedAt: token.issuedAt || new Date().toISOString(),
+      date: token.date || new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }),
+      syncStatus: token.syncStatus || 'SYNCED',
+      source: token.source || 'WEB_OFFLINE',
+      status: token.status || 'WAITING'
+    };
+    tokens.unshift(tokenObj);
+    setLocal(STORAGE_KEYS.OFFLINE_TOKENS, tokens.slice(0, 15));
+    try {
+      localStorage.setItem('sih_offline_tokens_v2', JSON.stringify(tokens));
+      window.dispatchEvent(new CustomEvent('sih_offline_tokens_changed', { detail: tokens }));
+    } catch (e) {
+      // ignore
+    }
   }
 
   // Appointments
@@ -1839,8 +2176,9 @@ class ApiStore {
   }
 
   getComplaintById(idOrNumber: string): Complaint | undefined {
+    const clean = String(idOrNumber || '').trim().toLowerCase();
     return this.getComplaints().find(
-      (c) => c.id === idOrNumber || c.complaintId.toLowerCase() === idOrNumber.trim().toLowerCase()
+      (c) => c.id === idOrNumber || String(c.complaintId || '').toLowerCase() === clean
     );
   }
 

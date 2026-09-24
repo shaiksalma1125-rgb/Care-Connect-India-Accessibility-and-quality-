@@ -162,10 +162,11 @@ export const AuthModals: React.FC<AuthModalsProps> = ({
     try {
       // Register with Firebase Auth & store in Firestore
       let user: User;
+      const safeEmail = String(email || '').trim().toLowerCase();
       try {
         user = await firebaseRegister({
           name: name.trim(),
-          email: email.trim().toLowerCase(),
+          email: safeEmail,
           password,
           mobile: phone.trim(),
           role,
@@ -178,7 +179,7 @@ export const AuthModals: React.FC<AuthModalsProps> = ({
         console.warn('Firebase registration exception, saving locally:', fbErr);
         user = apiStore.register({
           name: name.trim(),
-          email: email.trim().toLowerCase(),
+          email: safeEmail,
           mobile: phone.trim(),
           role,
           location: `${village.trim() || 'Vijayawada'}, ${mandal.trim() || 'Vijayawada'}`,

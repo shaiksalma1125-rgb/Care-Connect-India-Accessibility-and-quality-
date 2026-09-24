@@ -233,10 +233,11 @@ export const AppointmentView: React.FC<AppointmentViewProps> = ({
     setAuthLoading(true);
     try {
       let newUser: User;
+      const safeEmail = String(authEmail || '').trim().toLowerCase();
       try {
         newUser = await firebaseRegister({
           name: authName.trim(),
-          email: authEmail.trim().toLowerCase(),
+          email: safeEmail,
           password: authPassword,
           mobile: authPhone.trim(),
           role: 'CITIZEN',
@@ -248,7 +249,7 @@ export const AppointmentView: React.FC<AppointmentViewProps> = ({
         console.warn('Firebase registration exception, saving locally:', fbErr);
         newUser = apiStore.register({
           name: authName.trim(),
-          email: authEmail.trim().toLowerCase(),
+          email: safeEmail,
           mobile: authPhone.trim(),
           role: 'CITIZEN',
           location: authLocation.trim() || 'Vijayawada',
@@ -322,7 +323,8 @@ export const AppointmentView: React.FC<AppointmentViewProps> = ({
       return;
     }
 
-    if (!patientPhone.trim() || patientPhone.trim().replace(/\D/g, '').length < 10) {
+    const safePhone = String(patientPhone || '').trim();
+    if (!safePhone || safePhone.replace(/\D/g, '').length < 10) {
       setFormError('Please provide a valid 10-digit mobile contact number.');
       return;
     }

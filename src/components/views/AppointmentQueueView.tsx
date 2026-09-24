@@ -54,8 +54,10 @@ export const AppointmentQueueView: React.FC<AppointmentQueueViewProps> = ({
   const hospitals = useMemo(() => apiStore.getHospitals(), [queuesKey]);
   const [selectedHospitalId, setSelectedHospitalId] = useState(initialHospitalId || hospitals[0]?.id || 'hosp-1');
 
+  const isStaff = currentUser?.role === 'HOSPITAL_STAFF';
+
   // Walk-in token generator state
-  const [patientName, setPatientName] = useState(initialPatientName || currentUser?.name || 'V. Ramanjaneyulu');
+  const [patientName, setPatientName] = useState(initialPatientName || currentUser?.name || '');
   const [selectedDept, setSelectedDept] = useState(initialDepartment || 'General Medicine OPD');
   const [myTokenInfo, setMyTokenInfo] = useState<{
     tokenNumber: number;
@@ -78,16 +80,17 @@ export const AppointmentQueueView: React.FC<AppointmentQueueViewProps> = ({
     const offlineTokens = apiStore.getOfflineTokens();
     if (offlineTokens && offlineTokens.length > 0 && !myTokenInfo) {
       const latest = offlineTokens[0];
+      const hosp = hospitals.find((h) => h.id === latest.hospitalId);
       setMyTokenInfo({
         tokenNumber: latest.tokenNumber || 1,
         tokenCode: latest.tokenCode || 'TK-01',
         estimatedWaitMins: latest.estimatedWaitMins || 10,
-        roomNumber: latest.roomNumber || 'Room 104',
-        hospitalName: latest.hospitalName || 'Government General Hospital',
+        roomNumber: latest.roomNumber || 'Room 101',
+        hospitalName: latest.hospitalName || hosp?.name || 'Government Health Centre',
         department: latest.department || 'General Medicine OPD'
       });
     }
-  }, []);
+  }, [hospitals]);
 
   const [callAlert, setCallAlert] = useState<string | null>(null);
 
@@ -98,10 +101,11 @@ export const AppointmentQueueView: React.FC<AppointmentQueueViewProps> = ({
   const handleIssueToken = (e: React.FormEvent) => {
     e.preventDefault();
     const hosp = hospitals.find((h) => h.id === selectedHospitalId);
-    const res = apiStore.issueQueueToken(selectedHospitalId, selectedDept, patientName);
+    const pName = patientName.trim() || currentUser?.name || 'Citizen Patient';
+    const res = apiStore.issueQueueToken(selectedHospitalId, selectedDept, pName);
     setMyTokenInfo({
       ...res,
-      hospitalName: hosp?.name || 'Government General Hospital',
+      hospitalName: hosp?.name || 'Government Health Centre',
       department: selectedDept
     });
     setQueuesKey((k) => k + 1);
@@ -256,18 +260,25 @@ export const AppointmentQueueView: React.FC<AppointmentQueueViewProps> = ({
                     </div>
                   </div>
 
-                  {/* Chamber Staff Calling Simulation */}
+                  {/* Chamber Staff Calling Simulation / Live Status */}
                   <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
                     <span className="text-[11px] text-slate-400">
                       Total Issued: {q.totalTokensIssued}
                     </span>
-                    <button
-                      onClick={() => handleCallNext(q.id)}
-                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl transition-colors cursor-pointer flex items-center gap-1"
-                    >
-                      <Volume2 className="w-3.5 h-3.5" />
-                      <span>Call Next Token</span>
-                    </button>
+                    {isStaff ? (
+                      <button
+                        onClick={() => handleCallNext(q.id)}
+                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-colors cursor-pointer flex items-center gap-1 shadow-xs"
+                      >
+                        <Volume2 className="w-3.5 h-3.5" />
+                        <span>Call Next Token</span>
+                      </button>
+                    ) : (
+                      <span className="text-[11px] text-emerald-700 font-semibold flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-ping"></span>
+                        Live Queue Active
+                      </span>
+                    )}
                   </div>
                 </div>
               );

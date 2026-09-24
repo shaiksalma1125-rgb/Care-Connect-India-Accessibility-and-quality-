@@ -67,10 +67,10 @@ export const GoogleAccountChooserModal: React.FC<GoogleAccountChooserModalProps>
       // If an initial email was provided and not in the list, add it
       if (initialEmail && initialEmail.includes('@')) {
         const normalized = initialEmail.trim().toLowerCase();
-        if (!list.some((a) => a.email.toLowerCase() === normalized)) {
+        if (!list.some((a) => String(a.email || '').toLowerCase() === normalized)) {
           list.unshift({
             email: normalized,
-            name: initialName.trim() || normalized.split('@')[0],
+            name: (initialName || '').trim() || normalized.split('@')[0],
             avatarColor: 'bg-purple-600'
           });
         }
@@ -89,9 +89,10 @@ export const GoogleAccountChooserModal: React.FC<GoogleAccountChooserModalProps>
   if (!isOpen) return null;
 
   const saveAccountToList = (acc: GoogleAccount) => {
+    const accEmail = String(acc.email || '').toLowerCase();
     const updated = [
       acc,
-      ...accounts.filter((a) => a.email.toLowerCase() !== acc.email.toLowerCase())
+      ...accounts.filter((a) => String(a.email || '').toLowerCase() !== accEmail)
     ].slice(0, 8);
     setAccounts(updated);
     try {
@@ -126,7 +127,7 @@ export const GoogleAccountChooserModal: React.FC<GoogleAccountChooserModalProps>
       return;
     }
 
-    const name = customName.trim() || email.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+    const name = (customName || '').trim() || String(email || '').split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
     const randomColor = AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)];
 
     const newAcc: GoogleAccount = {

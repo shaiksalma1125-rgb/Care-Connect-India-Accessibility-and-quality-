@@ -223,12 +223,12 @@ export const ReferralTrackingView: React.FC<ReferralTrackingViewProps> = ({
     setLookupError('');
     setLookupResult(null);
 
-    const refIdClean = lookupReferralId.trim().toUpperCase();
-    const phoneDigits = lookupPhone.replace(/\D/g, '').slice(-10);
+    const refIdClean = String(lookupReferralId || '').trim().toUpperCase();
+    const phoneDigits = String(lookupPhone || '').replace(/\D/g, '').slice(-10);
 
     const match = allReferrals.find((r) => {
-      const matchId = r.referralId.toUpperCase() === refIdClean || r.id === lookupReferralId.trim();
-      const rPhoneDigits = r.patientPhone ? r.patientPhone.replace(/\D/g, '').slice(-10) : '';
+      const matchId = String(r.referralId || '').toUpperCase() === refIdClean || r.id === String(lookupReferralId || '').trim();
+      const rPhoneDigits = r.patientPhone ? String(r.patientPhone).replace(/\D/g, '').slice(-10) : '';
       const matchPhone = !phoneDigits || rPhoneDigits === phoneDigits;
       return matchId && matchPhone;
     });
@@ -610,7 +610,7 @@ export const ReferralTrackingView: React.FC<ReferralTrackingViewProps> = ({
                       {ref.transportMode && (
                         <span className="text-slate-500 flex items-center gap-1.5 text-[11px] font-medium">
                           <Truck className="w-3.5 h-3.5 text-blue-600" />
-                          <span>Transit: {ref.transportMode.replace('_', ' ')}</span>
+                          <span>Transit: {String(ref.transportMode).replace(/_/g, ' ')}</span>
                         </span>
                       )}
                     </div>

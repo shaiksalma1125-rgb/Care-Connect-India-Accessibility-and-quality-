@@ -349,7 +349,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   const handleToggleDocStatus = (doc: Doctor, newStatus: 'AVAILABLE' | 'IN_CONSULTATION' | 'ON_LEAVE') => {
     apiStore.updateDoctorStatus(doc.id, newStatus);
     refreshData();
-    showNotification(`${doc.name} status updated to ${newStatus.replace('_', ' ')}.`);
+    showNotification(`${doc.name} status updated to ${String(newStatus || 'AVAILABLE').replace(/_/g, ' ')}.`);
   };
 
   const handleAddSlot = () => {
@@ -530,11 +530,12 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   };
 
   const filteredMedicines = useMemo(() => {
+    const q = String(medSearchQuery || '').trim().toLowerCase();
     return medicines.filter((m) => {
       const matchSearch =
-        !medSearchQuery.trim() ||
-        m.medicineName.toLowerCase().includes(medSearchQuery.toLowerCase()) ||
-        m.category.toLowerCase().includes(medSearchQuery.toLowerCase());
+        !q ||
+        String(m.medicineName || '').toLowerCase().includes(q) ||
+        String(m.category || '').toLowerCase().includes(q);
 
       const matchStatus =
         medFilterStatus === 'All' ||
@@ -562,14 +563,15 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   };
 
   const filteredAppointments = useMemo(() => {
+    const q = String(aptSearch || '').trim().toLowerCase();
     return appointments.filter((apt) => {
       const matchStatus = aptStatusFilter === 'All' || apt.status === aptStatusFilter;
       const matchSearch =
-        !aptSearch.trim() ||
-        apt.patientName.toLowerCase().includes(aptSearch.toLowerCase()) ||
-        apt.tokenNumber.toLowerCase().includes(aptSearch.toLowerCase()) ||
-        apt.doctorName.toLowerCase().includes(aptSearch.toLowerCase()) ||
-        apt.appointmentId.toLowerCase().includes(aptSearch.toLowerCase());
+        !q ||
+        String(apt.patientName || '').toLowerCase().includes(q) ||
+        String(apt.tokenNumber || '').toLowerCase().includes(q) ||
+        String(apt.doctorName || '').toLowerCase().includes(q) ||
+        String(apt.appointmentId || '').toLowerCase().includes(q);
 
       let matchDate = true;
       if (aptDateFilter === 'TODAY') {
@@ -1546,7 +1548,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                             : 'bg-slate-100 text-slate-600'
                         }`}
                       >
-                        {doc.availabilityStatus.replace('_', ' ')}
+                        {String(doc.availabilityStatus || 'AVAILABLE').replace(/_/g, ' ')}
                       </span>
                     </div>
 
@@ -1804,7 +1806,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                             : 'bg-rose-100 text-rose-800'
                         }`}
                       >
-                        {med.status.replace('_', ' ')}
+                        {String(med.status || 'AVAILABLE').replace(/_/g, ' ')}
                       </span>
                     </td>
                     <td className="py-3 px-4 text-center">

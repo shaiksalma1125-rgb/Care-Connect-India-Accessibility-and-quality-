@@ -153,21 +153,21 @@ export const KNOWN_LOCATIONS: GeographicLocation[] = [
 ];
 
 export function findMatchingLocation(term: string): GeographicLocation | null {
-  const clean = term.trim().toLowerCase();
+  const clean = String(term || '').trim().toLowerCase();
   if (!clean) return null;
 
   // 1. Exact match on name or pincode
   const exact = KNOWN_LOCATIONS.find(
-    (l) => l.name.toLowerCase() === clean || l.pincode === clean
+    (l) => String(l.name || '').toLowerCase() === clean || l.pincode === clean
   );
   if (exact) return exact;
 
   // 2. Starts-with or contains match
   const partial = KNOWN_LOCATIONS.find(
     (l) =>
-      l.name.toLowerCase().includes(clean) ||
-      l.district.toLowerCase().includes(clean) ||
-      clean.includes(l.name.toLowerCase()) ||
+      String(l.name || '').toLowerCase().includes(clean) ||
+      String(l.district || '').toLowerCase().includes(clean) ||
+      clean.includes(String(l.name || '').toLowerCase()) ||
       l.pincode.includes(clean)
   );
 

@@ -62,13 +62,16 @@ export const PatientHealthRecordsView: React.FC<PatientHealthRecordsViewProps> =
   }, [recordsKey]);
 
   const filteredRecords = useMemo(() => {
+    const q = String(searchQuery || '').toLowerCase().trim();
     return records.filter((r) => {
       const matchType = activeFilter === 'ALL' || r.recordType === activeFilter;
-      const matchQuery =
-        r.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        r.facilityName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        r.doctorName.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchType && matchQuery;
+      if (!matchType) return false;
+      if (!q) return true;
+
+      const matchTitle = String(r.title || '').toLowerCase().includes(q);
+      const matchFacility = String(r.facilityName || '').toLowerCase().includes(q);
+      const matchDoctor = String(r.doctorName || '').toLowerCase().includes(q);
+      return matchTitle || matchFacility || matchDoctor;
     });
   }, [records, activeFilter, searchQuery]);
 
@@ -77,7 +80,7 @@ export const PatientHealthRecordsView: React.FC<PatientHealthRecordsViewProps> =
     apiStore.addHealthRecord({
       userId: currentUser?.id || 'usr-cit-1',
       abhaNumber: '91-2026-8812-4029',
-      abhaAddress: `${(currentUser?.name || 'salma').toLowerCase().replace(/[^a-z0-9]/g, '')}@abdm`,
+      abhaAddress: `${String(currentUser?.name || 'salma').toLowerCase().replace(/[^a-z0-9]/g, '')}@abdm`,
       recordType: newType,
       title: newTitle,
       facilityName: newFacility,
@@ -246,7 +249,7 @@ export const PatientHealthRecordsView: React.FC<PatientHealthRecordsViewProps> =
                       : 'bg-emerald-100 text-emerald-800'
                   }`}
                 >
-                  {record.recordType.replace('_', ' ')}
+                  {String(record.recordType || 'HEALTH_RECORD').replace(/_/g, ' ')}
                 </span>
                 <span className="text-xs text-slate-400 font-medium flex items-center gap-1">
                   <Calendar className="w-3.5 h-3.5" />

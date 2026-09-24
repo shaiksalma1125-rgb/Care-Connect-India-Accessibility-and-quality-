@@ -328,33 +328,80 @@ export interface OPDQueueInfo {
   lastUpdated: string;
 }
 
+export type HighRiskCategory =
+  | 'CHRONIC_DISEASE'
+  | 'MATERNAL'
+  | 'CHILD'
+  | 'OTHER_HIGH_RISK';
+
+export type FollowUpType =
+  | 'CHECKUP'
+  | 'TEST_DIAGNOSTIC_REVIEW'
+  | 'MEDICATION_REVIEW'
+  | 'SPECIALIST_REVIEW';
+
+export type FollowUpStatus =
+  | 'SCHEDULED'
+  | 'CONTACTED'
+  | 'COMPLETED'
+  | 'MISSED';
+
+export interface FollowUpOutcome {
+  id: string;
+  recordedAt: string;
+  recordedBy: string;
+  status: FollowUpStatus;
+  notes: string;
+  vitals?: string;
+  nextAction?: string;
+}
+
 export interface HighRiskPatient {
   id: string;
+  patientId?: string; // Unique patient ID (matching User.id)
   patientName: string;
   age?: number;
   patientAge?: number;
   gender?: string;
   phone?: string;
   patientPhone?: string;
+  patientEmail?: string;
   hospitalId: string;
   hospitalName: string;
   village?: string;
+
+  // High-Risk Clinical Specifications
+  isHighRisk?: boolean;
+  riskCategory?: HighRiskCategory;
   conditionType?: 'HIGH_RISK_PREGNANCY' | 'SEVERE_HYPERTENSION' | 'UNCONTROLLED_DIABETES' | 'INFANT_MALNUTRITION' | string;
   riskType?: string;
   condition?: string;
-  riskLevel: 'CRITICAL' | 'HIGH' | 'MODERATE';
-  lastCheckupDate?: string;
+  riskLevel?: 'CRITICAL' | 'HIGH' | 'MODERATE';
+
+  // Follow-up Management Properties
+  followUpType?: FollowUpType;
+  assignedTo?: string; // Responsible doctor or health worker
+  assignedRole?: string; // e.g. Doctor, ASHA Worker, Staff Nurse
+  nextFollowUpDate?: string; // YYYY-MM-DD
   nextFollowUpDueDate?: string;
-  nextFollowUpDate?: string;
+  instruction?: string; // Short follow-up instruction
+  status?: FollowUpStatus;
+  outcomes?: FollowUpOutcome[];
+  urgentEscalation?: boolean;
+  escalationReason?: string;
+
+  lastCheckupDate?: string;
   ashaWorker?: string;
   ashaWorkerName?: string;
   ashaPhone?: string;
   ashaWorkerPhone?: string;
-  reminderSent: boolean;
-  reminderStatus: 'SENT' | 'DELIVERED' | 'ACKNOWLEDGED' | 'MISSED';
+  reminderSent?: boolean;
+  reminderStatus?: 'SENT' | 'DELIVERED' | 'ACKNOWLEDGED' | 'MISSED';
   lastVitalsRecorded?: string;
   followUpActionNotes?: string;
   notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface EmergencyIncident {
@@ -390,4 +437,27 @@ export interface FacilityQualityScore {
   doctorPresenceIndex: number; // 1-5
   citizenResolutionPercent: number;
   lastAuditDate: string;
+}
+
+export type OfflineTokenSyncStatus = 'PENDING' | 'SYNCING' | 'SYNCED';
+export type OfflineTokenSource = 'WEB_OFFLINE' | 'SMS' | 'USSD';
+export type OfflineTokenCallStatus = 'WAITING' | 'CALLING' | 'SERVED' | 'COMPLETED' | 'NO_SHOW' | 'CANCELLED';
+
+export interface OfflineOPDToken {
+  id: string;
+  tokenCode: string; // e.g. TK-15
+  tokenNumber: number;
+  hospitalId: string;
+  hospitalName: string;
+  department: string;
+  patientName: string;
+  patientPhone?: string;
+  roomNumber: string;
+  estimatedWaitMins: number;
+  issuedAt: string;
+  date: string;
+  syncStatus: OfflineTokenSyncStatus;
+  source: OfflineTokenSource;
+  status: OfflineTokenCallStatus;
+  syncedAt?: string;
 }
